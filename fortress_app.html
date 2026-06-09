@@ -1,0 +1,1442 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>FORTRESS — Bitcoin L2 Bridge Security Framework</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:ital,wght@0,400;0,700;1,400&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<style>
+/* ═══════════════════════ RESET + TOKENS ═══════════════════════ */
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+
+:root {
+  --bg0:#060810;--bg1:#090c14;--bg2:#0d1120;--bg3:#111928;--bg4:#161f30;
+  --brd0:rgba(255,255,255,0.04);--brd1:rgba(255,255,255,0.08);--brd2:rgba(255,255,255,0.16);
+  --t1:#e8f0ff;--t2:#8899bb;--t3:#4a5670;--t4:#2a3248;
+
+  --gold:#f0b429;--gold-d:rgba(240,180,41,0.12);--gold-dd:rgba(240,180,41,0.06);
+  --cyan:#06d6a0;--cyan-d:rgba(6,214,160,0.12);
+  --red:#f25757;--red-d:rgba(242,87,87,0.12);
+  --blue:#4f8ef7;--blue-d:rgba(79,142,247,0.12);
+  --violet:#9b7bdf;--violet-d:rgba(155,123,223,0.1);
+  --orange:#f5821f;--orange-d:rgba(245,130,31,0.12);
+
+  --mono:'Space Mono',monospace;
+  --sans:'DM Sans',sans-serif;
+  --r4:4px;--r6:6px;--r8:8px;--r12:12px;
+
+  /* Live theme from mode */
+  --mode-col:var(--cyan);
+}
+
+html,body{height:100%;overflow:hidden;background:var(--bg0);color:var(--t1);font-family:var(--sans);font-size:12px;line-height:1.5}
+
+/* ═══════════════════ SETUP OVERLAY ═══════════════════ */
+#overlay{
+  position:fixed;inset:0;z-index:300;
+  display:flex;align-items:center;justify-content:center;
+  background:radial-gradient(ellipse at 40% 30%,rgba(240,180,41,0.06) 0%,transparent 60%),var(--bg0);
+}
+.setup-glass{
+  background:var(--bg1);border:1px solid var(--brd1);border-radius:16px;
+  padding:40px;width:420px;box-shadow:0 32px 80px rgba(0,0,0,0.6);
+  position:relative;overflow:hidden;
+}
+.setup-glass::before{
+  content:'';position:absolute;top:-60px;right:-60px;width:180px;height:180px;
+  border-radius:50%;background:radial-gradient(circle,rgba(240,180,41,0.08),transparent 70%);
+  pointer-events:none;
+}
+.s-logo{font-family:var(--mono);font-size:26px;color:var(--gold);letter-spacing:0.15em;line-height:1}
+.s-sub{font-family:var(--mono);font-size:8px;color:var(--t3);letter-spacing:0.12em;margin-top:3px;margin-bottom:6px}
+.s-desc{font-size:11px;color:var(--t2);line-height:1.7;margin-bottom:24px;padding:10px 12px;
+  background:var(--bg2);border-left:2px solid var(--gold-d);border-radius:0 var(--r4) var(--r4) 0}
+.s-label{display:block;font-family:var(--mono);font-size:9px;color:var(--t3);letter-spacing:0.1em;margin-bottom:5px}
+.s-input{width:100%;background:var(--bg2);border:1px solid var(--brd1);border-radius:var(--r6);
+  color:var(--t1);font-family:var(--mono);font-size:13px;padding:10px 14px;margin-bottom:16px;
+  outline:none;transition:border-color .15s}
+.s-input:focus{border-color:var(--gold)}
+.role-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:20px}
+.role-card{
+  background:var(--bg2);border:1px solid var(--brd0);border-radius:var(--r8);
+  padding:14px 8px;cursor:pointer;text-align:center;transition:all .15s;
+  font-family:var(--mono);font-size:9px;color:var(--t3);letter-spacing:0.06em;
+}
+.role-card span{display:block;font-size:18px;margin-bottom:5px}
+.role-card:hover{border-color:var(--brd2);color:var(--t2)}
+.role-card.sel-researcher{border-color:var(--blue);color:var(--blue);background:var(--blue-d)}
+.role-card.sel-attacker{border-color:var(--red);color:var(--red);background:var(--red-d)}
+.role-card.sel-watcher{border-color:var(--cyan);color:var(--cyan);background:var(--cyan-d)}
+.enter-btn{
+  width:100%;background:var(--gold);border:none;border-radius:var(--r8);
+  color:#060810;font-family:var(--mono);font-size:13px;font-weight:700;
+  padding:12px;cursor:pointer;letter-spacing:0.1em;transition:background .15s;
+}
+.enter-btn:hover{background:#f5c842}
+.api-note{font-family:var(--mono);font-size:8px;color:var(--t4);text-align:center;margin-top:10px}
+
+/* ═══════════════════ APP SHELL ═══════════════════ */
+#app{display:none;flex-direction:column;height:100vh}
+
+/* HEADER */
+.header{
+  display:flex;align-items:center;gap:12px;
+  padding:7px 16px;border-bottom:1px solid var(--brd0);
+  background:var(--bg1);flex-shrink:0;min-width:0;
+}
+.hdr-logo{font-family:var(--mono);font-size:14px;color:var(--gold);letter-spacing:0.15em;white-space:nowrap}
+.hdr-tag{font-family:var(--mono);font-size:7px;color:var(--t4);letter-spacing:0.1em;line-height:1.4;white-space:nowrap}
+.hdr-sep{width:1px;height:30px;background:var(--brd0);flex-shrink:0}
+.mode-badge{
+  font-family:var(--mono);font-size:9px;padding:4px 10px;border-radius:20px;
+  border:1px solid;transition:all .4s;white-space:nowrap;flex-shrink:0;
+}
+.users-bar{display:flex;gap:5px;flex:1;overflow:hidden}
+.user-chip{
+  font-family:var(--mono);font-size:8px;padding:3px 8px;border-radius:10px;
+  border:1px solid currentColor;opacity:0.7;white-space:nowrap;
+}
+.my-self{
+  display:flex;align-items:center;gap:7px;background:var(--bg2);
+  border:1px solid var(--brd1);border-radius:14px;padding:4px 12px;
+  font-family:var(--mono);font-size:9px;flex-shrink:0;
+}
+.pulse-dot{width:5px;height:5px;border-radius:50%;background:var(--cyan);animation:pulse 2s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.25}}
+
+/* ATTACK BANNER */
+.atk-banner{
+  display:none;padding:6px 16px;text-align:center;
+  font-family:var(--mono);font-size:10px;letter-spacing:0.07em;flex-shrink:0;
+}
+.atk-banner.on{
+  display:block;background:var(--red-d);border-bottom:1px solid var(--red);
+  color:var(--red);animation:blink 1s step-end infinite;
+}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.45}}
+
+/* BODY */
+.body{display:grid;grid-template-columns:230px 1fr;flex:1;overflow:hidden;min-height:0}
+
+/* SIDEBAR */
+.sidebar{
+  background:var(--bg1);border-right:1px solid var(--brd0);
+  overflow-y:auto;padding:12px;display:flex;flex-direction:column;gap:0;
+}
+::-webkit-scrollbar{width:3px}::-webkit-scrollbar-thumb{background:var(--brd1);border-radius:2px}
+
+.sb-section{
+  font-family:var(--mono);font-size:7px;color:var(--t4);letter-spacing:0.16em;
+  text-transform:uppercase;padding:10px 0 5px;border-bottom:1px solid var(--brd0);margin-bottom:8px;
+}
+.sb-section:first-child{padding-top:0}
+.param-row{margin-bottom:9px}
+.param-lbl{display:flex;justify-content:space-between;align-items:center;
+  font-family:var(--mono);font-size:8px;color:var(--t3);margin-bottom:3px}
+.param-val{color:var(--gold)}
+input[type=range]{
+  width:100%;height:3px;appearance:none;-webkit-appearance:none;background:var(--brd1);
+  border-radius:2px;outline:none;cursor:pointer;
+}
+input[type=range]::-webkit-slider-thumb{
+  -webkit-appearance:none;width:10px;height:10px;border-radius:50%;
+  background:var(--gold);cursor:pointer;
+}
+.act-btn{
+  width:100%;display:flex;align-items:center;justify-content:center;gap:5px;
+  padding:7px;border-radius:var(--r6);font-family:var(--mono);font-size:9px;
+  cursor:pointer;border:1px solid;transition:all .12s;margin-bottom:5px;letter-spacing:0.04em;
+}
+.act-btn:hover{filter:brightness(1.2)}
+.btn-red{background:var(--red-d);border-color:var(--red);color:var(--red)}
+.btn-cyan{background:var(--cyan-d);border-color:var(--cyan);color:var(--cyan)}
+.btn-blue{background:var(--blue-d);border-color:var(--blue);color:var(--blue)}
+.btn-orange{background:var(--orange-d);border-color:var(--orange);color:var(--orange)}
+.btn-violet{background:var(--violet-d);border-color:var(--violet);color:var(--violet)}
+
+/* MAIN CONTENT */
+.content{overflow-y:auto;padding:10px;display:flex;flex-direction:column;gap:9px}
+
+/* TAB BAR */
+.tabs{
+  display:flex;align-items:center;background:var(--bg2);border:1px solid var(--brd0);
+  border-radius:var(--r8);padding:4px;gap:3px;flex-shrink:0;
+}
+.tab{
+  flex:1;padding:6px 8px;border-radius:var(--r6);font-family:var(--mono);font-size:9px;
+  text-align:center;cursor:pointer;transition:all .15s;color:var(--t3);letter-spacing:0.04em;
+  border:1px solid transparent;
+}
+.tab.active{background:var(--bg3);color:var(--t1);border-color:var(--brd1)}
+.tab-panel{display:none;flex-direction:column;gap:8px}
+.tab-panel.active{display:flex}
+
+/* CARDS */
+.card{background:var(--bg2);border:1px solid var(--brd0);border-radius:var(--r8);padding:10px;position:relative;overflow:hidden}
+.card-title{font-family:var(--mono);font-size:9px;color:var(--t2);letter-spacing:0.05em;margin-bottom:2px}
+.card-sub{font-family:var(--mono);font-size:7px;color:var(--t4);margin-bottom:8px}
+
+/* TOP METRICS STRIP */
+.metrics-strip{display:grid;grid-template-columns:repeat(4,1fr);gap:7px}
+.metric{
+  background:var(--bg2);border:1px solid var(--brd0);border-radius:var(--r8);
+  padding:10px;position:relative;overflow:hidden;
+}
+.metric::after{content:'';position:absolute;top:0;left:0;right:0;height:2px}
+.metric.m-p::after{background:var(--cyan)}
+.metric.m-tau::after{background:var(--gold)}
+.metric.m-ser::after{background:var(--orange)}
+.metric.m-n::after{background:var(--blue)}
+.m-label{font-family:var(--mono);font-size:7px;color:var(--t4);letter-spacing:0.1em;text-transform:uppercase}
+.m-formula{font-family:var(--mono);font-size:6.5px;color:var(--t4);margin:1px 0 5px;line-height:1.4}
+.m-val{font-family:var(--mono);font-size:24px;font-weight:700;line-height:1.1;letter-spacing:-.02em}
+.m-badge{
+  display:inline-block;font-family:var(--mono);font-size:7px;padding:2px 7px;
+  border-radius:8px;margin-top:3px;
+}
+.m-sub{font-family:var(--mono);font-size:7px;color:var(--t4);margin-top:2px;line-height:1.4}
+.badge-safe{background:var(--cyan-d);color:var(--cyan)}
+.badge-warn{background:var(--gold-dd);color:var(--gold)}
+.badge-danger{background:var(--red-d);color:var(--red)}
+.badge-info{background:var(--blue-d);color:var(--blue)}
+
+/* TAU METER */
+.tau-bar-wrap{
+  background:var(--bg2);border:1px solid var(--brd0);border-radius:var(--r8);
+  padding:10px 14px;display:flex;align-items:center;gap:12px;
+}
+.tau-label{font-family:var(--mono);font-size:8px;color:var(--t3);white-space:nowrap;flex-shrink:0}
+.tau-status{font-family:var(--mono);font-size:11px;font-weight:700;flex:1;min-width:0}
+.tau-track{width:160px;height:7px;background:var(--bg3);border-radius:4px;overflow:hidden;flex-shrink:0}
+.tau-fill{height:100%;border-radius:4px;transition:width .35s,background .35s}
+.tau-zones{font-family:var(--mono);font-size:7px;color:var(--t4);flex-shrink:0}
+
+/* CHARTS */
+.chart-2col{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.chart-3col{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px}
+.chart-box{position:relative;height:150px}
+
+/* HEATMAP GRID */
+.heatmap-wrap{overflow-x:auto;padding-bottom:4px}
+.heatmap-grid{display:inline-grid;gap:2px;font-family:var(--mono);font-size:8px}
+.hm-header{text-align:center;color:var(--t4);padding:2px 4px}
+.hm-row-lbl{color:var(--t3);padding:2px 6px 2px 0;text-align:right;white-space:nowrap}
+.hm-cell{
+  width:32px;height:22px;border-radius:3px;display:flex;align-items:center;
+  justify-content:center;font-size:7px;font-family:var(--mono);cursor:pointer;
+  transition:transform .1s;
+}
+.hm-cell:hover{transform:scale(1.15);z-index:1;position:relative}
+
+/* NASH / NC2 */
+.nash-eq{
+  background:var(--gold-dd);border:1px solid rgba(240,180,41,0.2);
+  border-radius:var(--r8);padding:12px 14px;
+}
+.nash-eq-label{font-family:var(--mono);font-size:7px;color:var(--gold);letter-spacing:0.12em;margin-bottom:6px}
+.nash-eq-body{font-family:var(--mono);font-size:9px;color:var(--t2);line-height:1.8}
+.nash-eq-body em{color:var(--t1);font-style:normal;font-weight:700}
+
+/* SER BARS */
+.ser-row{display:flex;align-items:center;gap:8px;margin-bottom:7px}
+.ser-lbl{font-family:var(--mono);font-size:8px;color:var(--t3);width:80px;flex-shrink:0}
+.ser-track{flex:1;height:5px;background:var(--brd0);border-radius:2px;overflow:hidden}
+.ser-fill{height:100%;border-radius:2px;transition:width .35s}
+.ser-val{font-family:var(--mono);font-size:8px;color:var(--t2);width:70px;text-align:right;flex-shrink:0}
+
+/* TRAJECTORY BARS */
+.traj-row{
+  display:flex;align-items:center;gap:6px;padding:3px 0;
+  border-bottom:1px solid var(--brd0);font-family:var(--mono);font-size:8px;
+}
+.traj-spam{color:var(--t3);width:46px;flex-shrink:0}
+.traj-tau{color:var(--t2);width:38px;flex-shrink:0}
+.traj-track{flex:1;height:4px;background:var(--brd0);border-radius:2px;overflow:hidden}
+.traj-fill{height:100%;border-radius:2px}
+.traj-mode{width:120px;text-align:right;flex-shrink:0}
+.traj-change{font-size:7px;color:var(--gold);flex-shrink:0;min-width:24px}
+
+/* NASH TABLE */
+.nt{width:100%;border-collapse:collapse;font-family:var(--mono);font-size:8.5px}
+.nt th{color:var(--t4);font-size:7px;letter-spacing:.07em;padding:3px 6px;
+  border-bottom:1px solid var(--brd0);text-align:left;font-weight:400}
+.nt td{padding:3px 6px;color:var(--t2)}
+.nt tr.curr td{color:var(--gold)}
+
+/* LOG */
+.log-panel{
+  background:var(--bg2);border:1px solid var(--brd0);border-radius:var(--r8);
+  max-height:120px;overflow-y:auto;padding:8px;
+}
+.log-row{display:flex;gap:7px;padding:2px 0;border-bottom:1px solid var(--brd0);
+  font-family:var(--mono);font-size:8px;}
+.log-ts{color:var(--t4);min-width:52px;flex-shrink:0}
+.log-who{font-weight:700;flex-shrink:0}
+.log-txt{color:var(--t1)}
+.c1{color:#f0b429}.c2{color:#06d6a0}.c3{color:#4f8ef7}.c4{color:#9b7bdf}.c5{color:#f25757}
+
+/* LOADING SPINNER */
+.spin{
+  display:inline-block;width:10px;height:10px;border:1.5px solid var(--brd1);
+  border-top-color:var(--gold);border-radius:50%;animation:spin .6s linear infinite;
+}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* NC TAG BADGES */
+.nc-tag{
+  font-family:var(--mono);font-size:7px;padding:2px 6px;border-radius:4px;
+  letter-spacing:.08em;display:inline-block;margin-bottom:5px;
+}
+.nc1{background:rgba(240,180,41,0.15);color:var(--gold);border:1px solid rgba(240,180,41,0.3)}
+.nc2{background:rgba(79,142,247,0.12);color:var(--blue);border:1px solid rgba(79,142,247,0.3)}
+.nc3{background:rgba(245,130,31,0.12);color:var(--orange);border:1px solid rgba(245,130,31,0.3)}
+.nc4{background:rgba(6,214,160,0.12);color:var(--cyan);border:1px solid rgba(6,214,160,0.3)}
+
+/* SWEEP TABLE */
+.sweep-tbl{width:100%;border-collapse:collapse;font-family:var(--mono);font-size:8px}
+.sweep-tbl th{color:var(--t4);font-size:7px;padding:3px 5px;border-bottom:1px solid var(--brd0);text-align:left;font-weight:400}
+.sweep-tbl td{padding:3px 5px;color:var(--t2)}
+.sweep-tbl tr.curr td{color:var(--orange)}
+
+/* API STATUS */
+.api-pill{
+  font-family:var(--mono);font-size:7px;padding:2px 7px;border-radius:8px;
+  border:1px solid;letter-spacing:.06em;
+}
+.api-ok{border-color:var(--cyan);color:var(--cyan)}
+.api-err{border-color:var(--red);color:var(--red)}
+.api-wait{border-color:var(--gold);color:var(--gold)}
+</style>
+</head>
+<body>
+
+<!-- ══════════════════ SETUP OVERLAY ══════════════════ -->
+<div id="overlay">
+  <div class="setup-glass">
+    <div class="s-logo">FORTRESS</div>
+    <div class="s-sub">Formal Oracle for Real-Time Bridge Security Assessment</div>
+    <div class="s-desc">
+      Multi-user collaborative security framework. Python backend (NC1–NC4) handles all computation.
+      Open this page simultaneously with colleagues — state syncs in real time via the API.
+    </div>
+
+    <label class="s-label">API HOST  <span style="color:var(--t4)">(running fortress_api.py)</span></label>
+    <input type="text" id="api-host" class="s-input" value="http://localhost:8000" placeholder="http://localhost:8000">
+
+    <label class="s-label">YOUR HANDLE</label>
+    <input type="text" id="name-in" class="s-input" placeholder="Harish / Praatibh / Reviewer-A …" maxlength="20">
+
+    <label class="s-label">SESSION ROLE</label>
+    <div class="role-grid">
+      <div class="role-card sel-researcher" data-role="researcher"><span>🔬</span>Researcher</div>
+      <div class="role-card" data-role="attacker"><span>⚔</span>Attacker</div>
+      <div class="role-card" data-role="watcher"><span>🛡</span>Watcher</div>
+    </div>
+
+    <button class="enter-btn" onclick="joinSession()">ENTER SESSION →</button>
+    <div class="api-note" id="conn-note">Awaiting connection test…</div>
+  </div>
+</div>
+
+<!-- ══════════════════ APP ══════════════════ -->
+<div id="app" style="display:none;flex-direction:column;height:100vh">
+
+  <!-- HEADER -->
+  <div class="header">
+    <div>
+      <div class="hdr-logo">FORTRESS</div>
+      <div class="hdr-tag">Bitcoin L2 · NSYSU 2026 · NC1–NC4 Research Framework</div>
+    </div>
+    <div class="hdr-sep"></div>
+    <div id="mode-badge" class="mode-badge badge-safe" style="border-color:var(--cyan);color:var(--cyan)">
+      BITVM_NORMAL
+    </div>
+    <div class="hdr-sep"></div>
+    <div class="users-bar" id="users-bar"></div>
+    <div id="api-status" class="api-pill api-ok">API ✓</div>
+    <div class="my-self">
+      <div class="pulse-dot"></div>
+      <span id="my-name">—</span>
+      <span id="my-role" style="color:var(--t3)">—</span>
+    </div>
+  </div>
+
+  <!-- ATTACK BANNER -->
+  <div class="atk-banner" id="atk-banner"></div>
+
+  <!-- BODY -->
+  <div class="body">
+
+    <!-- SIDEBAR -->
+    <div class="sidebar">
+      <div class="sb-section">Network Parameters</div>
+
+      <div class="param-row">
+        <div class="param-lbl"><span>Watchers n</span><span class="param-val" id="v-n">5</span></div>
+        <input type="range" id="sl-n" min="1" max="20" step="1" value="5" oninput="sliderChange('n_watchers',+this.value,'v-n',Math.round)">
+      </div>
+      <div class="param-row">
+        <div class="param-lbl"><span>Block capacity</span><span class="param-val" id="v-cap">3</span></div>
+        <input type="range" id="sl-cap" min="1" max="20" step="1" value="3" oninput="sliderChange('block_capacity',+this.value,'v-cap',Math.round)">
+      </div>
+      <div class="param-row">
+        <div class="param-lbl"><span>Spam rate (tx/block)</span><span class="param-val" id="v-spam">5.0</span></div>
+        <input type="range" id="sl-spam" min="0.5" max="20" step="0.5" value="5" oninput="sliderChange('spam_rate',+this.value,'v-spam',v=>v.toFixed(1))">
+      </div>
+      <div class="param-row">
+        <div class="param-lbl"><span>Challenge window (W)</span><span class="param-val" id="v-win">6</span></div>
+        <input type="range" id="sl-win" min="1" max="144" step="1" value="6" oninput="sliderChange('challenge_window',+this.value,'v-win',Math.round)">
+      </div>
+      <div class="param-row">
+        <div class="param-lbl"><span>Watcher fee (sat/vB)</span><span class="param-val" id="v-fee">55</span></div>
+        <input type="range" id="sl-fee" min="10" max="300" step="5" value="55" oninput="sliderChange('initial_fee',+this.value,'v-fee',Math.round)">
+      </div>
+      <div class="param-row">
+        <div class="param-lbl"><span>Fee escalation (/block)</span><span class="param-val" id="v-esc">20</span></div>
+        <input type="range" id="sl-esc" min="0" max="60" step="5" value="20" oninput="sliderChange('escalation_rate',+this.value,'v-esc',Math.round)">
+      </div>
+
+      <div class="sb-section">Attack Parameters</div>
+
+      <div class="param-row">
+        <div class="param-lbl"><span>Spam fee max (sat/vB)</span><span class="param-val" id="v-smax">130</span></div>
+        <input type="range" id="sl-smax" min="50" max="400" step="10" value="130" oninput="sliderChange('spam_fee_max',+this.value,'v-smax',Math.round)">
+      </div>
+      <div class="param-row">
+        <div class="param-lbl"><span>Vault value (BTC)</span><span class="param-val" id="v-vault">12.65</span></div>
+        <input type="range" id="sl-vault" min="0.1" max="100" step="0.1" value="12.65" oninput="sliderChange('vault_value_btc',+this.value,'v-vault',v=>v.toFixed(2))">
+      </div>
+      <div class="param-row">
+        <div class="param-lbl"><span>NC2 Reward (sats)</span><span class="param-val" id="v-rew">5000</span></div>
+        <input type="range" id="sl-rew" min="1000" max="50000" step="500" value="5000" oninput="sliderChange('personal_reward_sats',+this.value,'v-rew',Math.round)">
+      </div>
+
+      <div class="sb-section" id="role-hdr">Actions</div>
+      <div id="role-actions"></div>
+    </div>
+
+    <!-- CONTENT -->
+    <div class="content">
+
+      <!-- METRICS STRIP -->
+      <div class="metrics-strip">
+        <div class="metric m-p">
+          <div class="m-label">P(Security)</div>
+          <div class="m-formula">1−∏[1−Pᵢ(success)]ⁿ</div>
+          <div class="m-val" id="mv-psec" style="color:var(--cyan)">—</div>
+          <div><span class="m-badge badge-safe" id="mb-psec">—</span></div>
+          <div class="m-sub" id="ms-psec">N*₉₉ = —</div>
+        </div>
+        <div class="metric m-tau">
+          <div class="m-label">Threat Index τ</div>
+          <div class="m-formula">0.5τ₁ + 0.3τ₂ + 0.2τ₃</div>
+          <div class="m-val" id="mv-tau" style="color:var(--gold)">—</div>
+          <div><span class="m-badge badge-warn" id="mb-tau">—</span></div>
+          <div class="m-sub" id="ms-tau">τ₁/τ₂/τ₃: —</div>
+        </div>
+        <div class="metric m-ser">
+          <div class="m-label">SER (Efficiency Ratio)</div>
+          <div class="m-formula">C_attack / C_defense</div>
+          <div class="m-val" id="mv-ser" style="color:var(--orange)">—</div>
+          <div><span class="m-badge badge-warn" id="mb-ser">—</span></div>
+          <div class="m-sub" id="ms-ser">Break-even fee: —</div>
+        </div>
+        <div class="metric m-n">
+          <div class="m-label">Nash α*(n)</div>
+          <div class="m-formula">1−(c/r)^(1/(n−1))</div>
+          <div class="m-val" id="mv-nash" style="color:var(--blue)">—</div>
+          <div><span class="m-badge badge-info" id="mb-nash">—</span></div>
+          <div class="m-sub" id="ms-nash">Tragedy limit: —</div>
+        </div>
+      </div>
+
+      <!-- TAU BAR -->
+      <div class="tau-bar-wrap">
+        <span class="tau-label">BitVM→ZK SWITCH</span>
+        <span class="tau-status" id="tau-status">—</span>
+        <div class="tau-track"><div class="tau-fill" id="tau-fill" style="width:0%;background:var(--cyan)"></div></div>
+        <span class="tau-zones">τ [0.30|0.55|0.78]</span>
+      </div>
+
+      <!-- TABS -->
+      <div class="tabs">
+        <div class="tab active" onclick="switchTab('nc1')">⚙ NC1 · Security Model</div>
+        <div class="tab" onclick="switchTab('nc2')">🎮 NC2 · Commons Game</div>
+        <div class="tab" onclick="switchTab('nc3')">💰 NC3 · Attack Economy</div>
+        <div class="tab" onclick="switchTab('nc4')">🔄 NC4 · Adaptive Mode</div>
+        <div class="tab" onclick="switchTab('log')">📋 Session Log</div>
+      </div>
+
+      <!-- NC1 TAB -->
+      <div class="tab-panel active" id="tab-nc1">
+        <div class="nash-eq">
+          <div class="nash-eq-label">NC1 — PROBABILISTIC SECURITY MODEL</div>
+          <div class="nash-eq-body" id="nc1-theorem">
+            P(system secure) = 1 − ∏ᵢ [1 − Pᵢ(success)] where Pᵢ uses <em>Poisson mempool model</em>
+            under adversarial spam injection. Single watcher P: <em id="nc1-psingle">—</em> ·
+            System P(N=<em id="nc1-n">?</em>): <em id="nc1-psystem">—</em> ·
+            N*₉₉ = <em id="nc1-nstar">—</em> (min watchers for 99% security)
+          </div>
+        </div>
+
+        <div class="chart-2col">
+          <div class="card">
+            <span class="nc-tag nc1">NC1</span>
+            <div class="card-title">P(Security) vs Watcher Count</div>
+            <div class="card-sub">Solid=attack conditions · Dashed=ideal (no censorship)</div>
+            <div class="chart-box"><canvas id="ch-nc1-curve"></canvas></div>
+          </div>
+          <div class="card">
+            <span class="nc-tag nc1">NC1</span>
+            <div class="card-title">Per-Block Inclusion Probability</div>
+            <div class="card-sub">P(tx confirmed | block t) with adaptive fee escalation</div>
+            <div class="chart-box"><canvas id="ch-nc1-perblock"></canvas></div>
+          </div>
+        </div>
+
+        <div class="card">
+          <span class="nc-tag nc1">NC1</span>
+          <div class="card-title">Security Phase Diagram — Heatmap P(security | spam, N)</div>
+          <div class="card-sub">Phase-transition boundary visible — novel visualisation from Python PSM</div>
+          <div class="heatmap-wrap" id="heatmap-wrap"><div id="heatmap-grid">Loading…</div></div>
+        </div>
+
+        <div class="card">
+          <span class="nc-tag nc1">NC1</span>
+          <div class="card-title">Strategy Comparison — Static vs Adaptive vs Premium</div>
+          <div class="card-sub">Computed by Python ProbabilisticSecurityModel · Poisson CDF, not approximation</div>
+          <div id="nc1-comparison">Loading…</div>
+        </div>
+      </div>
+
+      <!-- NC2 TAB -->
+      <div class="tab-panel" id="tab-nc2">
+        <div class="nash-eq">
+          <div class="nash-eq-label">NC2 — WATCHER TRAGEDY OF THE COMMONS (Nash Equilibrium)</div>
+          <div class="nash-eq-body" id="nc2-theorem">
+            Symmetric Nash: p* = 1 − (c/r)^(1/(N−1)). As N→∞, P(≥1 acts) →
+            <em id="nc2-limit">—</em> (ceiling = 1−c/r). Adding watchers past optimum is
+            <em>formally ineffective</em>. Current N=<em id="nc2-cn">?</em>: p*=<em id="nc2-pstar">—</em>,
+            P_agg=<em id="nc2-pagg">—</em>, Tragedy Index=<em id="nc2-ti">—</em>
+          </div>
+        </div>
+
+        <div class="chart-2col">
+          <div class="card">
+            <span class="nc-tag nc2">NC2</span>
+            <div class="card-title">Nash α*(N) Decay + Aggregate P(Security)</div>
+            <div class="card-sub">Blue=individual α* decaying · Violet=aggregate converging to tragedy limit</div>
+            <div class="chart-box"><canvas id="ch-nc2-nash"></canvas></div>
+          </div>
+          <div class="card">
+            <span class="nc-tag nc2">NC2</span>
+            <div class="card-title">Minimum Reward for 99% Participation vs N</div>
+            <div class="card-sub">Incentive design parameter: r* = c/(1−target)^((N−1)/N)</div>
+            <div class="chart-box"><canvas id="ch-nc2-reward"></canvas></div>
+          </div>
+        </div>
+
+        <div class="chart-2col">
+          <div class="card">
+            <span class="nc-tag nc2">NC2</span>
+            <div class="card-title">Nash Equilibrium Table — Key N Values</div>
+            <div class="card-sub">Current N highlighted · Proves free-rider problem formally</div>
+            <div id="nc2-table">Loading…</div>
+          </div>
+          <div class="card">
+            <span class="nc-tag nc2">NC2</span>
+            <div class="card-title">Tragedy Index at Each N</div>
+            <div class="card-sub">(P_ideal − P_nash)/P_ideal — 0=no tragedy, 1=full collapse</div>
+            <div class="chart-box"><canvas id="ch-nc2-tragedy"></canvas></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- NC3 TAB -->
+      <div class="tab-panel" id="tab-nc3">
+        <div class="nash-eq" style="background:rgba(245,130,31,0.06);border-color:rgba(245,130,31,0.2)">
+          <div class="nash-eq-label" style="color:var(--orange)">NC3 — ATTACK COST THRESHOLD &amp; SECURITY EFFICIENCY RATIO</div>
+          <div class="nash-eq-body" id="nc3-summary">
+            SER = C_attack / C_defense. C_attack=<em id="nc3-catk">—</em> BTC ·
+            C_defense=<em id="nc3-cdef">—</em> BTC · SER=<em id="nc3-ser">—</em>×.
+            Break-even watcher fee: <em id="nc3-be">—</em> sat/vB (current <em id="nc3-curr">—</em>).
+            <em id="nc3-verdict">—</em>
+          </div>
+        </div>
+
+        <div class="chart-2col">
+          <div class="card">
+            <span class="nc-tag nc3">NC3</span>
+            <div class="card-title">Cost Decomposition</div>
+            <div class="card-sub">C_attack vs C_defense component breakdown (BTC)</div>
+            <div id="nc3-ser-bars">Loading…</div>
+          </div>
+          <div class="card">
+            <span class="nc-tag nc3">NC3</span>
+            <div class="card-title">SER vs Watcher Count</div>
+            <div class="card-sub">Economic security landscape as N grows</div>
+            <div class="chart-box"><canvas id="ch-nc3-ser"></canvas></div>
+          </div>
+        </div>
+
+        <div class="card">
+          <span class="nc-tag nc3">NC3</span>
+          <div class="card-title">Break-Even Fee Sweep Table — N=1..15</div>
+          <div class="card-sub">Minimum watcher fee for economic security at each watcher count</div>
+          <div id="nc3-sweep-table">Loading…</div>
+        </div>
+      </div>
+
+      <!-- NC4 TAB -->
+      <div class="tab-panel" id="tab-nc4">
+        <div class="nash-eq" style="background:rgba(6,214,160,0.05);border-color:rgba(6,214,160,0.2)">
+          <div class="nash-eq-label" style="color:var(--cyan)">NC4 — ADAPTIVE SECURITY ORCHESTRATOR (ASO)</div>
+          <div class="nash-eq-body" id="nc4-assess-text">
+            τ = 0.5τ₁ + 0.3τ₂ + 0.2τ₃. τ₁=mempool saturation · τ₂=fee disadvantage · τ₃=window tightness.
+            Phase boundaries: [0,0.30)=NORMAL · [0.30,0.55)=ENHANCED · [0.55,0.78)=HYBRID · [0.78,1]=ZK_ONLY
+          </div>
+        </div>
+
+        <div class="chart-2col">
+          <div class="card">
+            <span class="nc-tag nc4">NC4</span>
+            <div class="card-title">Threat Index τ Components</div>
+            <div class="card-sub">τ₁ (mempool) · τ₂ (fee gap) · τ₃ (window tightness)</div>
+            <div class="chart-box"><canvas id="ch-nc4-tau"></canvas></div>
+          </div>
+          <div class="card">
+            <span class="nc-tag nc4">NC4</span>
+            <div class="card-title">Threat Trajectory — spam 0.5→15 tx/block</div>
+            <div class="card-sub">Mode transition points as adversarial pressure increases</div>
+            <div id="nc4-trajectory" style="max-height:220px;overflow-y:auto">Loading…</div>
+          </div>
+        </div>
+
+        <div class="card">
+          <span class="nc-tag nc4">NC4</span>
+          <div class="card-title">Phase Boundary Visualisation</div>
+          <div class="card-sub">Threat zones derived from NC1 (PSM) — model-grounded, not heuristic</div>
+          <div id="nc4-phases">Loading…</div>
+        </div>
+      </div>
+
+      <!-- LOG TAB -->
+      <div class="tab-panel" id="tab-log">
+        <div class="card">
+          <div class="card-title">Collaborative Session Log</div>
+          <div class="card-sub">All parameter changes, attacks, and joins — streamed via Python SSE</div>
+          <div class="log-panel" id="log-panel" style="max-height:400px">
+            <div class="log-row"><span class="log-ts">—</span><span class="log-txt">Session initialised — awaiting participants</span></div>
+          </div>
+        </div>
+      </div>
+
+    </div><!-- /content -->
+  </div><!-- /body -->
+</div><!-- /app -->
+
+<script>
+/* ══════════════════════════════════════════════════════════════
+   FORTRESS FRONTEND v2 — Python-powered, zero math duplication
+   All NC1–NC4 computation is delegated to fortress_api.py
+══════════════════════════════════════════════════════════════ */
+
+let API = 'http://localhost:8000';
+let me = {name:'', role:'researcher', color:1};
+let selectedRole = 'researcher';
+let pollInterval = null;
+let sseSource    = null;
+let activeTab    = 'nc1';
+let lastComputed = null;   // last full_compute response
+
+// Chart instances
+let charts = {};
+
+// ── SESSION PARAMS (mirrors server defaults) ──────────────────
+let P = {
+  block_capacity:3, spam_rate:5.0, spam_fee_min:85.0, spam_fee_max:130.0,
+  challenge_window:6, initial_fee:55.0, escalation_rate:20.0, max_fee:250.0,
+  n_watchers:5, monitoring_cost_sats:1000, challenge_tx_fee_sats:2000,
+  personal_reward_sats:5000, vault_value_sats:1265000000,
+  attack_spam_per_block:10, attack_spam_fee:130.0, attack_tx_vbytes:140,
+  watcher_tx_vbytes:150, vault_value_btc:12.65, attack_active:false,
+};
+
+/* ═══ SETUP ═══ */
+document.querySelectorAll('.role-card').forEach(el => {
+  el.onclick = () => {
+    document.querySelectorAll('.role-card').forEach(c => c.className='role-card');
+    el.classList.add('sel-'+el.dataset.role);
+    selectedRole = el.dataset.role;
+  };
+});
+
+// Test API on load
+(async () => {
+  const host = document.getElementById('api-host').value;
+  try {
+    const r = await fetch(host+'/api/health');
+    if (r.ok) document.getElementById('conn-note').textContent = '✓ API reachable — ready to enter session';
+    else document.getElementById('conn-note').textContent = '✗ API returned error — check fortress_api.py';
+  } catch {
+    document.getElementById('conn-note').textContent = '⚠ Cannot reach API — start: python fortress_api.py';
+  }
+})();
+
+async function joinSession() {
+  API = document.getElementById('api-host').value.trim().replace(/\/$/, '');
+  const name = (document.getElementById('name-in').value.trim() || 'Anonymous').slice(0,20);
+  const colors = [1,2,3,4,5];
+  me = {name, role:selectedRole, color:colors[Math.floor(Math.random()*5)]};
+
+  document.getElementById('my-name').textContent = name;
+  document.getElementById('my-role').textContent  = '· '+selectedRole;
+
+  document.getElementById('overlay').style.display = 'none';
+  document.getElementById('app').style.display = 'flex';
+
+  // Load server state
+  try {
+    const r = await fetch(API+'/api/state');
+    const d = await r.json();
+    Object.assign(P, d.params);
+    syncSliders();
+  } catch {}
+
+  initCharts();
+  renderRoleActions();
+  await computeAll();
+  await addLog('→ '+name+' joined as '+selectedRole);
+
+  // SSE for real-time push
+  connectSSE();
+  // Heartbeat
+  pollInterval = setInterval(heartbeat, 3000);
+  heartbeat();
+}
+
+/* ═══ SSE ═══ */
+function connectSSE() {
+  if (sseSource) sseSource.close();
+  sseSource = new EventSource(API+'/api/events');
+  sseSource.onmessage = e => {
+    const msg = JSON.parse(e.data);
+    if (msg.type === 'state_changed') {
+      Object.assign(P, msg.data.params);
+      syncSliders();
+      computeAll();
+    } else if (msg.type === 'state_reset') {
+      Object.assign(P, msg.data.params);
+      syncSliders();
+      computeAll();
+    } else if (msg.type === 'log_entry') {
+      prependLog([msg.data]);
+    } else if (msg.type === 'attack_launched' || msg.type === 'attack_ended') {
+      Object.assign(P, msg.data.params || {});
+      syncSliders();
+      computeAll();
+    }
+  };
+  sseSource.onerror = () => {
+    document.getElementById('api-status').className = 'api-pill api-err';
+    document.getElementById('api-status').textContent = 'API ✗';
+    setTimeout(connectSSE, 5000);
+  };
+  sseSource.onopen = () => {
+    document.getElementById('api-status').className = 'api-pill api-ok';
+    document.getElementById('api-status').textContent = 'API ✓';
+  };
+}
+
+/* ═══ HEARTBEAT ═══ */
+async function heartbeat() {
+  try {
+    const r = await fetch(API+'/api/users/heartbeat', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({name:me.name, role:me.role, color:me.color})
+    });
+    const d = await r.json();
+    renderUserBar(d.active_users);
+  } catch {}
+}
+
+function renderUserBar(users) {
+  document.getElementById('users-bar').innerHTML = users.map(u =>
+    `<span class="user-chip c${u.color}">${u.name}·${u.role}</span>`
+  ).join('');
+}
+
+/* ═══ SLIDER CHANGES ═══ */
+async function sliderChange(key, val, labelId, fmt) {
+  P[key] = val;
+  document.getElementById(labelId).textContent = fmt(val);
+  await computeAll();
+  await pushState();
+  await addLog(me.name+' → '+key+' = '+fmt(val));
+}
+
+function syncSliders() {
+  const map = {
+    'sl-n':    {k:'n_watchers',      l:'v-n',     f:Math.round},
+    'sl-cap':  {k:'block_capacity',  l:'v-cap',   f:Math.round},
+    'sl-spam': {k:'spam_rate',       l:'v-spam',  f:v=>v.toFixed(1)},
+    'sl-win':  {k:'challenge_window',l:'v-win',   f:Math.round},
+    'sl-fee':  {k:'initial_fee',     l:'v-fee',   f:Math.round},
+    'sl-esc':  {k:'escalation_rate', l:'v-esc',   f:Math.round},
+    'sl-smax': {k:'spam_fee_max',    l:'v-smax',  f:Math.round},
+    'sl-vault':{k:'vault_value_btc', l:'v-vault', f:v=>v.toFixed(2)},
+    'sl-rew':  {k:'personal_reward_sats',l:'v-rew',f:Math.round},
+  };
+  Object.entries(map).forEach(([id,cfg]) => {
+    const sl = document.getElementById(id), lb = document.getElementById(cfg.l);
+    if (sl && lb) { sl.value = P[cfg.k]; lb.textContent = cfg.f(P[cfg.k]); }
+  });
+}
+
+async function pushState() {
+  try {
+    await fetch(API+'/api/state', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({params:P, user:me.name, role:me.role})
+    });
+  } catch {}
+}
+
+/* ═══ FULL COMPUTE ═══ */
+async function computeAll() {
+  try {
+    const body = {
+      block_capacity:    P.block_capacity,
+      spam_rate:         P.spam_rate,
+      spam_fee_min:      P.spam_fee_min,
+      spam_fee_max:      P.spam_fee_max,
+      challenge_window:  P.challenge_window,
+      initial_fee:       P.initial_fee,
+      escalation_rate:   P.escalation_rate,
+      max_fee:           P.max_fee,
+      n_watchers:        P.n_watchers,
+      spam_range_max:    15.0,
+      spam_range_step:   0.5,
+    };
+    const r = await fetch(API+'/api/full_compute', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body:JSON.stringify(body)
+    });
+    const d = await r.json();
+    lastComputed = d;
+    renderAll(d);
+    document.getElementById('api-status').className='api-pill api-ok';
+    document.getElementById('api-status').textContent='API ✓';
+  } catch(err) {
+    document.getElementById('api-status').className='api-pill api-err';
+    document.getElementById('api-status').textContent='API ✗';
+  }
+
+  // Tab-specific deeper calls
+  if (activeTab === 'nc1') await refreshNC1Tab();
+  if (activeTab === 'nc2') await refreshNC2Tab();
+  if (activeTab === 'nc3') await refreshNC3Tab();
+  if (activeTab === 'nc4') await refreshNC4Tab();
+}
+
+/* ═══ RENDER ALL METRICS ═══ */
+function renderAll(d) {
+  const nc1 = d.nc1, nc2 = d.nc2, nc3 = d.nc3, nc4 = d.nc4;
+
+  // P(security)
+  const ps = nc1.p_system;
+  setMetric('mv-psec', ps.toFixed(4), ps>0.7?'var(--cyan)':ps>0.4?'var(--gold)':'var(--red)');
+  setBadge('mb-psec', ps, [0.7,0.4], ['STRONG','MODERATE','WEAK'], true);
+  document.getElementById('ms-psec').textContent = 'N*₉₉ = '+nc1.n_star_99+(nc1.n_star_99>=9999?' (∞)':'');
+
+  // Tau
+  const tau = nc4.tau;
+  setMetric('mv-tau', tau.toFixed(4), tau<0.3?'var(--cyan)':tau<0.55?'var(--gold)':'var(--red)');
+  setBadge('mb-tau', tau, [0.55,0.30], ['CRITICAL','CAUTION','SAFE'], false, true);
+  document.getElementById('ms-tau').textContent = 'τ₁='+nc4.tau1+' τ₂='+nc4.tau2+' τ₃='+nc4.tau3;
+
+  // SER
+  const ser = nc3.ser;
+  setMetric('mv-ser', ser.toFixed(2)+'×', ser>2?'var(--cyan)':ser>1?'var(--gold)':'var(--red)');
+  setBadge('mb-ser', ser, [2.0,1.0], ['DEF.DOM.','MARGINAL','ATK.DOM.'], true);
+  document.getElementById('ms-ser').textContent = 'Break-even: '+nc3.break_even_fee+' sat/vB';
+
+  // Nash α*
+  const pn = nc2.p_nash_individual;
+  setMetric('mv-nash', pn.toFixed(4), 'var(--blue)');
+  setBadge('mb-nash', nc2.p_effective, [0.9,0.5], ['STRONG','MODERATE','WEAK'], true);
+  document.getElementById('ms-nash').textContent = 'Tragedy limit: '+(nc2.tragedy_limit*100).toFixed(2)+'%';
+
+  // Tau bar
+  const tf = document.getElementById('tau-fill');
+  tf.style.width = (tau*100).toFixed(1)+'%';
+  tf.style.background = tau<0.3?'var(--cyan)':tau<0.55?'var(--gold)':'var(--red)';
+
+  // Tau status
+  const ts = document.getElementById('tau-status');
+  if (tau<0.3) { ts.textContent = `✓ BITVM NORMAL — τ=${tau.toFixed(3)} below safe threshold`; ts.style.color='var(--cyan)'; }
+  else if (tau<0.55) { ts.textContent = `⚡ BITVM ENHANCED — τ=${tau.toFixed(3)} · fee escalation active`; ts.style.color='var(--gold)'; }
+  else if (tau<0.78) { ts.textContent = `⚠ HYBRID MODE — τ=${tau.toFixed(3)} · ZK proof queued as fallback`; ts.style.color='var(--orange)'; }
+  else { ts.textContent = `⛔ ZK ONLY — τ=${tau.toFixed(3)} ≥ 0.78 · BitVM security below 50%`; ts.style.color='var(--red)'; }
+
+  // Mode badge
+  const mb = document.getElementById('mode-badge');
+  mb.textContent = nc4.mode;
+  const mc = {teal:'var(--cyan)',amber:'var(--gold)',orange:'var(--orange)',red:'var(--red)'}[nc4.mode_color]||'var(--cyan)';
+  mb.style.borderColor = mc; mb.style.color = mc;
+
+  // NC1 theorem
+  document.getElementById('nc1-psingle').textContent = nc1.p_single.toFixed(4);
+  document.getElementById('nc1-n').textContent       = P.n_watchers;
+  document.getElementById('nc1-psystem').textContent = nc1.p_system.toFixed(4);
+  document.getElementById('nc1-nstar').textContent   = nc1.n_star_99;
+
+  // NC2 theorem
+  document.getElementById('nc2-limit').textContent = (nc2.tragedy_limit*100).toFixed(2)+'%';
+  document.getElementById('nc2-cn').textContent    = P.n_watchers;
+  document.getElementById('nc2-pstar').textContent = nc2.p_nash_individual.toFixed(4);
+  document.getElementById('nc2-pagg').textContent  = nc2.p_effective.toFixed(4);
+  document.getElementById('nc2-ti').textContent    = (1-nc2.p_effective).toFixed(4);
+
+  // NC3 summary
+  document.getElementById('nc3-catk').textContent  = nc3.attack_cost_btc.toFixed(6);
+  document.getElementById('nc3-cdef').textContent  = nc3.defense_cost_btc.toFixed(6);
+  document.getElementById('nc3-ser').textContent   = ser.toFixed(2);
+  document.getElementById('nc3-be').textContent    = nc3.break_even_fee+' sat/vB';
+  document.getElementById('nc3-curr').textContent  = P.initial_fee+' sat/vB';
+  document.getElementById('nc3-verdict').textContent = nc3.attack_profitable ?
+    '⚠ Attack is economically rational against this vault' : '✓ Attack not profitable at current parameters';
+
+  // NC4 assess text
+  const at = document.getElementById('nc4-assess-text');
+  at.innerHTML = `τ=<em>${nc4.tau.toFixed(4)}</em> (τ₁=${nc4.tau1} τ₂=${nc4.tau2} τ₃=${nc4.tau3}) →
+    Mode: <em>${nc4.mode_icon} ${nc4.mode}</em> · ${nc4.reason} ·
+    Recommended fee: <em>${nc4.recommended_fee} sat/vB</em> · N*₉₉=<em>${nc4.min_watchers_99}</em>`;
+
+  // Attack banner
+  const banner = document.getElementById('atk-banner');
+  if (P.attack_active) {
+    banner.textContent = `⚔ ATTACK ACTIVE — spam=${P.spam_rate} tx/blk · τ=${tau.toFixed(3)} · ${nc4.mode_icon} ${nc4.mode} — Watchers: respond now`;
+    banner.className = 'atk-banner on';
+  } else {
+    banner.className = 'atk-banner';
+  }
+
+  // Update charts with new data
+  updateCoreCharts(nc1, nc2, nc4);
+}
+
+/* ═══ CHARTS ═══ */
+function initCharts() {
+  Chart.defaults.color = '#4a5670';
+  Chart.defaults.borderColor = 'rgba(255,255,255,0.04)';
+
+  const mkLine = (id, datasets, yLabel='') => {
+    const ctx = document.getElementById(id);
+    if (!ctx) return null;
+    return new Chart(ctx.getContext('2d'), {
+      type:'line',
+      data:{labels:[], datasets},
+      options:{
+        responsive:true, maintainAspectRatio:false, animation:{duration:200},
+        plugins:{legend:{display:false}},
+        scales:{
+          x:{ticks:{font:{family:'Space Mono',size:8}}},
+          y:{min:0,max:1,ticks:{font:{family:'Space Mono',size:8}},
+             title:{display:!!yLabel,text:yLabel,font:{family:'Space Mono',size:8}}},
+        }
+      }
+    });
+  };
+
+  charts['nc1-curve'] = mkLine('ch-nc1-curve', [
+    {label:'Realistic', data:[], borderColor:'#06d6a0', borderWidth:2, pointRadius:0, fill:false, tension:.3},
+    {label:'Ideal',     data:[], borderColor:'#06d6a0', borderWidth:1.2, borderDash:[5,3], pointRadius:0, fill:false, tension:.3},
+  ], 'P(security)');
+
+  charts['nc1-perblock'] = mkLine('ch-nc1-perblock', [
+    {label:'P(inclusion)', data:[], borderColor:'#f0b429', borderWidth:2, pointRadius:3,
+     pointBackgroundColor:'#f0b429', fill:false, tension:.2},
+  ], 'P(inclusion)');
+
+  charts['nc2-nash'] = mkLine('ch-nc2-nash', [
+    {label:'α*(N) individual',  data:[], borderColor:'#4f8ef7', borderWidth:2, pointRadius:0, fill:false, tension:.3},
+    {label:'P_agg(N)',          data:[], borderColor:'#9b7bdf', borderWidth:1.5, borderDash:[5,3], pointRadius:0, fill:false, tension:.3},
+    {label:'Tragedy limit',     data:[], borderColor:'#f25757', borderWidth:1, borderDash:[3,4], pointRadius:0, fill:false},
+  ], 'participation');
+
+  charts['nc2-reward'] = new Chart(document.getElementById('ch-nc2-reward').getContext('2d'), {
+    type:'bar',
+    data:{labels:[], datasets:[{
+      label:'Min reward sats', data:[], backgroundColor:'rgba(79,142,247,0.35)',
+      borderColor:'#4f8ef7', borderWidth:1,
+    }]},
+    options:{
+      responsive:true,maintainAspectRatio:false,animation:{duration:200},
+      plugins:{legend:{display:false}},
+      scales:{x:{ticks:{font:{family:'Space Mono',size:7}}},y:{ticks:{font:{family:'Space Mono',size:7}}}}
+    }
+  });
+
+  charts['nc2-tragedy'] = mkLine('ch-nc2-tragedy', [
+    {label:'Tragedy Index', data:[], borderColor:'#f25757', borderWidth:2, pointRadius:0, fill:true,
+     backgroundColor:'rgba(242,87,87,0.06)', tension:.3},
+  ], 'tragedy index');
+
+  charts['nc3-ser'] = new Chart(document.getElementById('ch-nc3-ser').getContext('2d'), {
+    type:'line',
+    data:{labels:[], datasets:[
+      {label:'SER', data:[], borderColor:'#f5821f', borderWidth:2, pointRadius:0, fill:false, tension:.3, yAxisID:'y'},
+      {label:'Break-even fee', data:[], borderColor:'#f0b429', borderWidth:1.5, borderDash:[5,3], pointRadius:0, fill:false, tension:.3, yAxisID:'y1'},
+    ]},
+    options:{
+      responsive:true,maintainAspectRatio:false,animation:{duration:200},
+      plugins:{legend:{display:false}},
+      scales:{
+        x:{ticks:{font:{family:'Space Mono',size:7}}},
+        y:{type:'linear',position:'left',ticks:{font:{family:'Space Mono',size:7}}},
+        y1:{type:'linear',position:'right',ticks:{font:{family:'Space Mono',size:7}},grid:{drawOnChartArea:false}},
+      }
+    }
+  });
+
+  charts['nc4-tau'] = new Chart(document.getElementById('ch-nc4-tau').getContext('2d'), {
+    type:'bar',
+    data:{
+      labels:['τ₁\nMempool','τ₂\nFee Gap','τ₃\nWindow','τ\nComposite'],
+      datasets:[{data:[0,0,0,0],backgroundColor:['rgba(79,142,247,.5)','rgba(240,180,41,.5)','rgba(245,130,31,.5)','rgba(6,214,160,.5)'],
+        borderColor:['#4f8ef7','#f0b429','#f5821f','#06d6a0'],borderWidth:1.5}]
+    },
+    options:{
+      responsive:true,maintainAspectRatio:false,animation:{duration:300},
+      plugins:{legend:{display:false}},
+      scales:{
+        y:{min:0,max:1,ticks:{font:{family:'Space Mono',size:8}}},
+        x:{ticks:{font:{family:'Space Mono',size:7}}},
+      }
+    }
+  });
+}
+
+function updateCoreCharts(nc1, nc2, nc4) {
+  // NC1 security curve
+  if (charts['nc1-curve'] && nc1.sec_curve) {
+    const labels = nc1.sec_curve.map(d=>d.n);
+    charts['nc1-curve'].data.labels = labels;
+    charts['nc1-curve'].data.datasets[0].data = nc1.sec_curve.map(d=>d.p);
+    charts['nc1-curve'].update('none');
+  }
+
+  // NC1 per-block
+  if (charts['nc1-perblock'] && nc1.per_block) {
+    charts['nc1-perblock'].data.labels = nc1.per_block.map((_,i)=>'b'+i);
+    charts['nc1-perblock'].data.datasets[0].data = nc1.per_block;
+    charts['nc1-perblock'].update('none');
+  }
+
+  // NC2 nash curve
+  if (charts['nc2-nash'] && nc2.participation_curve) {
+    const labels = nc2.participation_curve.map(d=>d.n);
+    charts['nc2-nash'].data.labels = labels;
+    charts['nc2-nash'].data.datasets[0].data = nc2.participation_curve.map(d=>d.p_individual);
+    charts['nc2-nash'].data.datasets[1].data = nc2.participation_curve.map(d=>d.p_effective);
+    charts['nc2-nash'].data.datasets[2].data = nc2.participation_curve.map(()=>nc2.tragedy_limit);
+    charts['nc2-nash'].update('none');
+  }
+
+  // NC2 tragedy index (1 - p_effective)
+  if (charts['nc2-tragedy'] && nc2.participation_curve) {
+    charts['nc2-tragedy'].data.labels = nc2.participation_curve.map(d=>d.n);
+    charts['nc2-tragedy'].data.datasets[0].data = nc2.participation_curve.map(d=>1-d.p_effective);
+    charts['nc2-tragedy'].update('none');
+  }
+
+  // NC4 tau bar chart
+  if (charts['nc4-tau']) {
+    charts['nc4-tau'].data.datasets[0].data = [nc4.tau1, nc4.tau2, nc4.tau3, nc4.tau];
+    charts['nc4-tau'].update('none');
+  }
+}
+
+/* ═══ TAB-SPECIFIC DEEP REFRESHES ═══ */
+async function refreshNC1Tab() {
+  try {
+    // Heatmap
+    const hr = await fetch(API+'/api/nc1/heatmap', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({
+        block_capacity: P.block_capacity, spam_fee_min: P.spam_fee_min,
+        spam_fee_max: P.spam_fee_max, challenge_window: P.challenge_window,
+        initial_fee: P.initial_fee, escalation_rate: P.escalation_rate, max_fee: P.max_fee,
+      })
+    });
+    const hd = await hr.json();
+    renderHeatmap(hd);
+
+    // Strategy comparison
+    const cr = await fetch(API+'/api/nc1/security', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({
+        block_capacity: P.block_capacity, spam_rate: P.spam_rate,
+        spam_fee_min: P.spam_fee_min, spam_fee_max: P.spam_fee_max,
+        challenge_window: P.challenge_window, initial_fee: P.initial_fee,
+        escalation_rate: P.escalation_rate, max_fee: P.max_fee, n_watchers: P.n_watchers,
+      })
+    });
+    const cd = await cr.json();
+    renderNC1Comparison(cd.strategy_comparison);
+  } catch {}
+}
+
+async function refreshNC2Tab() {
+  try {
+    const r = await fetch(API+'/api/nc2/incentive', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({
+        n_watchers: P.n_watchers, monitoring_cost_sats: P.monitoring_cost_sats,
+        challenge_tx_fee_sats: P.challenge_tx_fee_sats,
+        personal_reward_sats: P.personal_reward_sats,
+        vault_value_sats: P.vault_value_sats, max_n: 20,
+      })
+    });
+    const d = await r.json();
+    // NC2 reward bar chart
+    if (charts['nc2-reward']) {
+      charts['nc2-reward'].data.labels = d.rows.map(r=>r.n);
+      charts['nc2-reward'].data.datasets[0].data = d.rows.map(r=>r.min_reward_for_99_sats);
+      charts['nc2-reward'].update('none');
+    }
+    // Nash table
+    if (lastComputed) renderNC2Table(lastComputed.nc2);
+  } catch {}
+}
+
+async function refreshNC3Tab() {
+  try {
+    const r = await fetch(API+'/api/nc3/sweep', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({
+        challenge_window: P.challenge_window, block_capacity: P.block_capacity,
+        attack_spam_per_block: P.attack_spam_per_block, attack_spam_fee: P.attack_spam_fee,
+        attack_tx_vbytes: P.attack_tx_vbytes, num_watchers: P.n_watchers,
+        watcher_fee_sat_vb: P.initial_fee, watcher_tx_vbytes: P.watcher_tx_vbytes,
+        vault_value_btc: P.vault_value_btc, max_n_sweep: 15,
+      })
+    });
+    const d = await r.json();
+    if (charts['nc3-ser']) {
+      charts['nc3-ser'].data.labels = d.sweep.map(s=>s.n);
+      charts['nc3-ser'].data.datasets[0].data = d.sweep.map(s=>Math.min(s.ser, 2000));
+      charts['nc3-ser'].data.datasets[1].data = d.sweep.map(s=>s.break_even_fee);
+      charts['nc3-ser'].update('none');
+    }
+    renderNC3SweepTable(d.sweep);
+    if (lastComputed) renderNC3Bars(lastComputed.nc3);
+  } catch {}
+}
+
+async function refreshNC4Tab() {
+  try {
+    const r = await fetch(API+'/api/nc4/trajectory', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({
+        block_capacity: P.block_capacity, spam_rate: P.spam_rate,
+        spam_fee_min: P.spam_fee_min, spam_fee_max: P.spam_fee_max,
+        challenge_window: P.challenge_window, initial_fee: P.initial_fee,
+        escalation_rate: P.escalation_rate, max_fee: P.max_fee, n_watchers: P.n_watchers,
+        spam_range_max: 15.0, spam_range_step: 0.5,
+      })
+    });
+    const d = await r.json();
+    renderTrajectory(d.trajectory, d.current_spam);
+    renderNC4Phases();
+  } catch {}
+}
+
+/* ═══ RENDER HELPERS ═══ */
+function renderHeatmap(d) {
+  const {spam_rates, watcher_counts, grid} = d;
+  const cols = watcher_counts.length + 1;
+  let html = `<div class="heatmap-grid" style="grid-template-columns:50px repeat(${watcher_counts.length},32px)">`;
+  html += `<div class="hm-header">spam↓N→</div>`;
+  watcher_counts.forEach(n => html += `<div class="hm-header">${n}</div>`);
+  spam_rates.forEach((sr, i) => {
+    html += `<div class="hm-row-lbl">${sr}</div>`;
+    grid[i].forEach(v => {
+      const bg = v>=0.95?'rgba(6,214,160,0.7)':v>=0.70?'rgba(240,180,41,0.6)':v>=0.40?'rgba(245,130,31,0.5)':'rgba(242,87,87,0.6)';
+      const tc = v>=0.5?'#060810':'#e8f0ff';
+      html += `<div class="hm-cell" style="background:${bg};color:${tc}" title="P=${v}">${Math.round(v*100)}</div>`;
+    });
+  });
+  html += '</div>';
+  html += '<div style="font-family:var(--mono);font-size:7px;color:var(--t4);margin-top:5px">';
+  html += '<span style="color:rgba(6,214,160,0.8)">■ ≥95%  </span><span style="color:rgba(240,180,41,0.8)">■ 70–94%  </span><span style="color:rgba(245,130,31,0.8)">■ 40–69%  </span><span style="color:rgba(242,87,87,0.8)">■ &lt;40%</span></div>';
+  document.getElementById('heatmap-wrap').innerHTML = html;
+}
+
+function renderNC1Comparison(rows) {
+  const html = `<table style="width:100%;border-collapse:collapse;font-family:var(--mono);font-size:8.5px">
+    <thead><tr>
+      <th style="color:var(--t4);font-size:7px;padding:3px 6px;border-bottom:1px solid var(--brd0);text-align:left;font-weight:400">Strategy</th>
+      <th style="color:var(--t4);font-size:7px;padding:3px 6px;border-bottom:1px solid var(--brd0);text-align:right;font-weight:400">P(single watcher)</th>
+      <th style="color:var(--t4);font-size:7px;padding:3px 6px;border-bottom:1px solid var(--brd0);text-align:right;font-weight:400">N*₉₉</th>
+    </tr></thead>
+    <tbody>${rows.map(r => {
+      const c = r.label==='Current'?'var(--gold)':'var(--t2)';
+      return `<tr><td style="padding:3px 6px;color:${c}">${r.label}</td>
+        <td style="padding:3px 6px;color:${c};text-align:right">${r.p_single.toFixed(4)}</td>
+        <td style="padding:3px 6px;color:${c};text-align:right">${r.n_star_99>=9999?'∞':r.n_star_99}</td>
+      </tr>`;
+    }).join('')}</tbody>
+  </table>`;
+  document.getElementById('nc1-comparison').innerHTML = html;
+}
+
+function renderNC2Table(nc2) {
+  const curve = nc2.participation_curve;
+  const rows = [1,2,3,4,5,8,10,15,20].map(n => {
+    const pt = curve.find(p=>p.n===n);
+    if (!pt) return '';
+    const isCurr = n===P.n_watchers;
+    const c = isCurr?'color:var(--gold)':'';
+    return `<tr class="${isCurr?'curr':''}">
+      <td>${n}${isCurr?' ◀':''}</td>
+      <td>${pt.p_individual.toFixed(4)}</td>
+      <td>${pt.p_effective.toFixed(4)}</td>
+      <td>${(1-pt.p_effective).toFixed(4)}</td>
+    </tr>`;
+  });
+  document.getElementById('nc2-table').innerHTML = `
+    <table class="nt"><thead><tr>
+      <th>N</th><th>α*(N) ind.</th><th>P_agg</th><th>Tragedy Idx</th>
+    </tr></thead><tbody>${rows.join('')}</tbody></table>`;
+}
+
+function renderNC3Bars(nc3) {
+  const items = [
+    {lbl:'Attack cost',   val:nc3.attack_cost_btc,  max:Math.max(nc3.attack_cost_btc, nc3.defense_cost_btc)*1.2, col:'var(--red)'},
+    {lbl:'Defense total', val:nc3.defense_cost_btc, max:Math.max(nc3.attack_cost_btc, nc3.defense_cost_btc)*1.2, col:'var(--cyan)'},
+  ];
+  document.getElementById('nc3-ser-bars').innerHTML = items.map(it => `
+    <div class="ser-row">
+      <span class="ser-lbl">${it.lbl}</span>
+      <div class="ser-track"><div class="ser-fill" style="width:${Math.min(100,(it.val/it.max)*100).toFixed(1)}%;background:${it.col}"></div></div>
+      <span class="ser-val">${it.val.toFixed(6)} BTC</span>
+    </div>`).join('')
+  + `<div style="font-family:var(--mono);font-size:8px;color:var(--t2);margin-top:6px;border-top:1px solid var(--brd0);padding-top:6px">
+    SER = ${nc3.ser.toFixed(2)}× · ${nc3.attack_profitable?'⚠ Attack economically rational — bridge at risk':'✓ Defense dominant — bridge economically resilient'}
+    </div>`;
+}
+
+function renderNC3SweepTable(rows) {
+  document.getElementById('nc3-sweep-table').innerHTML = `
+    <table class="sweep-tbl"><thead><tr>
+      <th>N</th><th>SER ×</th><th>Break-even (sat/vB)</th><th>Curr. fee (sat/vB)</th><th>Status</th>
+    </tr></thead><tbody>${rows.map(r => {
+      const curr = r.n===P.n_watchers;
+      const ok = P.initial_fee >= r.break_even_fee;
+      return `<tr class="${curr?'curr':''}">
+        <td>${r.n}${curr?' ◀':''}</td>
+        <td>${r.ser.toFixed(1)}×</td>
+        <td>${r.break_even_fee.toFixed(1)}</td>
+        <td>${P.initial_fee}</td>
+        <td style="color:${ok?'var(--cyan)':'var(--red)'}">${ok?'✓ Defensible':'⚠ Under-budgeted'}</td>
+      </tr>`;
+    }).join('')}</tbody></table>`;
+}
+
+function renderTrajectory(traj, currentSpam) {
+  document.getElementById('nc4-trajectory').innerHTML = traj.map(t => {
+    const modeColors = {teal:'var(--cyan)',amber:'var(--gold)',orange:'var(--orange)',red:'var(--red)'};
+    const col = modeColors[t.mode_color]||'var(--cyan)';
+    const isCurr = Math.abs(t.spam_rate - currentSpam) < 0.3;
+    return `<div class="traj-row" style="${isCurr?'background:rgba(240,180,41,0.06);border-radius:3px':''}">
+      <span class="traj-spam" style="color:${isCurr?'var(--gold)':'var(--t3)'}">${t.spam_rate.toFixed(1)}</span>
+      <span class="traj-tau">${t.tau.toFixed(3)}</span>
+      <div class="traj-track"><div class="traj-fill" style="width:${(t.tau*100).toFixed(0)}%;background:${col}"></div></div>
+      <span class="traj-mode" style="color:${col};font-family:var(--mono);font-size:7px">${t.mode_icon} ${t.mode}</span>
+      <span class="traj-change">${t.mode_changed?'◀':''}</span>
+    </div>`;
+  }).join('');
+}
+
+function renderNC4Phases() {
+  const phases = [
+    {lo:0,hi:0.30,label:'BITVM_NORMAL',   col:'var(--cyan)',  desc:'P(sec) ≥ 0.95 — standard challenge-response adequate'},
+    {lo:0.30,hi:0.55,label:'BITVM_ENHANCED',col:'var(--gold)',desc:'P ∈ [0.75,0.95) — fee escalation protocol activated'},
+    {lo:0.55,hi:0.78,label:'HYBRID',       col:'var(--orange)',desc:'P ∈ [0.50,0.75) — ZK proof queued as fallback'},
+    {lo:0.78,hi:1.0, label:'ZK_ONLY',      col:'var(--red)',  desc:'P < 0.50 — BitVM fails, ZK mandatory'},
+  ];
+  document.getElementById('nc4-phases').innerHTML = phases.map(p => `
+    <div style="display:flex;align-items:center;gap:10px;padding:6px 0;border-bottom:1px solid var(--brd0);font-family:var(--mono);font-size:8.5px">
+      <span style="color:${p.col};width:170px;flex-shrink:0">τ ∈ [${p.lo.toFixed(2)}, ${p.hi.toFixed(2)}) → ${p.label}</span>
+      <div style="flex:1;height:5px;background:var(--brd0);border-radius:2px;overflow:hidden">
+        <div style="height:100%;width:${((p.hi-p.lo)*100).toFixed(0)}%;background:${p.col};opacity:.6;border-radius:2px"></div>
+      </div>
+      <span style="color:var(--t3);font-size:7px;flex:2;text-align:right">${p.desc}</span>
+    </div>`).join('');
+}
+
+/* ═══ LOG ═══ */
+async function addLog(action) {
+  try {
+    await fetch(API+'/api/log', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({user:me.name, role:me.role, color:me.color, action})
+    });
+  } catch {}
+}
+
+function prependLog(entries) {
+  const panel = document.getElementById('log-panel');
+  entries.slice(0,1).forEach(e => {
+    const div = document.createElement('div');
+    div.className = 'log-row';
+    div.innerHTML = `<span class="log-ts">${e.ts}</span><span class="log-who c${e.color||1}">[${e.role}] ${e.user}</span><span class="log-txt">${e.action}</span>`;
+    panel.insertBefore(div, panel.firstChild);
+    if (panel.children.length > 50) panel.removeChild(panel.lastChild);
+  });
+}
+
+/* ═══ UTILITY ═══ */
+function setMetric(id, val, color) {
+  const el = document.getElementById(id);
+  el.textContent = val; el.style.color = color;
+}
+
+function setBadge(id, val, thresholds, labels, highGood=true, invert=false) {
+  const el = document.getElementById(id);
+  let idx;
+  if (highGood) idx = val >= thresholds[0] ? 0 : val >= thresholds[1] ? 1 : 2;
+  else          idx = val >= thresholds[0] ? 2 : val >= thresholds[1] ? 1 : 0;
+  if (invert)   idx = val >= thresholds[0] ? 2 : val >= thresholds[1] ? 1 : 0;
+  el.textContent = labels[idx];
+  el.className = 'm-badge ' + ['badge-safe','badge-warn','badge-danger'][idx];
+}
+
+function switchTab(tab) {
+  activeTab = tab;
+  document.querySelectorAll('.tab').forEach((t,i) => {
+    const tabs = ['nc1','nc2','nc3','nc4','log'];
+    t.classList.toggle('active', tabs[i]===tab);
+  });
+  document.querySelectorAll('.tab-panel').forEach(p => {
+    p.classList.toggle('active', p.id==='tab-'+tab);
+  });
+  // Refresh tab-specific data
+  if (tab==='nc1') refreshNC1Tab();
+  if (tab==='nc2') refreshNC2Tab();
+  if (tab==='nc3') refreshNC3Tab();
+  if (tab==='nc4') refreshNC4Tab();
+}
+
+/* ═══ ROLE ACTIONS ═══ */
+function renderRoleActions() {
+  const el = document.getElementById('role-actions');
+  if (me.role === 'attacker') {
+    el.innerHTML = `
+      <button class="act-btn btn-red" onclick="launchPreset('mempool_flood')">⚔ Mempool Flood</button>
+      <button class="act-btn btn-red" onclick="launchPreset('fee_squeeze')">💸 Fee Squeeze</button>
+      <button class="act-btn btn-red" onclick="launchPreset('full_censorship')">☠ Full Censorship DoS</button>
+      <button class="act-btn btn-blue" onclick="endAttack()">✕ Withdraw Attack</button>
+      <div style="font-family:var(--mono);font-size:7.5px;color:var(--t4);margin-top:6px;line-height:1.6">
+        Each preset configures realistic attack parameters via the Python backend.
+        Watch τ cross thresholds and trigger mode transitions.
+      </div>`;
+  } else if (me.role === 'watcher') {
+    el.innerHTML = `
+      <button class="act-btn btn-cyan" onclick="addWatcher()">🛡 +1 Watcher</button>
+      <button class="act-btn btn-blue" onclick="removeWatcher()">↓ −1 Watcher</button>
+      <button class="act-btn btn-violet" onclick="escalateFee()">⬆ Boost Fee (+20)</button>
+      <div style="font-family:var(--mono);font-size:7.5px;color:var(--t4);margin-top:6px;line-height:1.6">
+        Add watchers to improve P(sec). Observe how NC2 ceiling prevents full security.
+      </div>`;
+  } else {
+    el.innerHTML = `
+      <button class="act-btn btn-blue" onclick="resetState()">↺ Reset Defaults</button>
+      <button class="act-btn btn-violet" onclick="exportState()">⬇ Export JSON</button>
+      <button class="act-btn btn-orange" onclick="launchPreset('window_tightening')">📐 Tighten Window</button>
+      <div style="font-family:var(--mono);font-size:7.5px;color:var(--t4);margin-top:6px;line-height:1.6">
+        Full parameter control. Every slider computes with real Python models.
+      </div>`;
+  }
+}
+
+/* ═══ ATTACK PRESETS ═══ */
+async function launchPreset(preset) {
+  try {
+    await fetch(API+'/api/attack/launch/'+preset, {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({user:me.name})
+    });
+    const r = await fetch(API+'/api/state');
+    const d = await r.json();
+    Object.assign(P, d.params);
+    syncSliders();
+    await computeAll();
+  } catch {}
+}
+
+async function endAttack() {
+  try {
+    await fetch(API+'/api/attack/end', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({user:me.name})
+    });
+    const r = await fetch(API+'/api/state');
+    const d = await r.json();
+    Object.assign(P, d.params);
+    syncSliders();
+    await computeAll();
+  } catch {}
+}
+
+/* ═══ WATCHER ACTIONS ═══ */
+async function addWatcher() {
+  P.n_watchers = Math.min(20, P.n_watchers+1);
+  document.getElementById('sl-n').value = P.n_watchers;
+  document.getElementById('v-n').textContent = P.n_watchers;
+  await computeAll(); await pushState();
+  await addLog('🛡 Watcher activated — n='+P.n_watchers);
+}
+async function removeWatcher() {
+  P.n_watchers = Math.max(1, P.n_watchers-1);
+  document.getElementById('sl-n').value = P.n_watchers;
+  document.getElementById('v-n').textContent = P.n_watchers;
+  await computeAll(); await pushState();
+  await addLog('↓ Watcher removed — n='+P.n_watchers);
+}
+async function escalateFee() {
+  P.initial_fee = Math.min(300, P.initial_fee+20);
+  document.getElementById('sl-fee').value = P.initial_fee;
+  document.getElementById('v-fee').textContent = P.initial_fee;
+  await computeAll(); await pushState();
+  await addLog('⬆ Fee escalated to '+P.initial_fee+' sat/vB');
+}
+
+async function resetState() {
+  try {
+    await fetch(API+'/api/state/reset', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({user:me.name})
+    });
+    const r = await fetch(API+'/api/state');
+    const d = await r.json();
+    Object.assign(P, d.params);
+    syncSliders();
+    await computeAll();
+    await addLog('↺ Reset to paper defaults');
+  } catch {}
+}
+
+function exportState() {
+  const data = JSON.stringify({timestamp:new Date().toISOString(),params:P,computed:lastComputed},null,2);
+  const a = document.createElement('a');
+  a.href = 'data:application/json;charset=utf-8,'+encodeURIComponent(data);
+  a.download = 'fortress_state.json'; a.click();
+}
+</script>
+</body>
+</html>
